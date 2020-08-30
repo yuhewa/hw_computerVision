@@ -178,7 +178,7 @@ class imageDataset(Dataset):
 
 
 # 設定model
-ENCODER = 'dpn68'
+ENCODER = 'se_resnext50_32x4d'
 ENCODER_WEIGHTS = 'imagenet'
 ACTIVATION = 'sigmoid'
 DEVICE = 'cuda'
@@ -210,7 +210,7 @@ val_dataset = imageDataset(
     classes=CLASSES
 )
 
-train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, num_workers=2)
 val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False)
 
 # 設定 loss 和 optimizer
