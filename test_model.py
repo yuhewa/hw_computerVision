@@ -69,7 +69,11 @@ def get_validation_augmentation():
 
 # 之後會用於取得preprocessing
 def to_tensor(x, **kwargs):
-    return x.transpose(2, 0, 1).astype('float32')
+    # print('---------------')
+    # print(type(x.transpose(2, 0, 1).astype('float32')))
+    # print(x.transpose(2, 0, 1).astype('float32').shape)
+    # print('---------------')
+    return x.astype('float32')
 
 def get_preprocessing(preprocessing_fn):
     _transform = [
@@ -109,18 +113,26 @@ class imageDataset(Dataset):
         
         labels = [(label == value) for value in self.class_values]
         label = np.stack(labels, axis=-1).astype('float')
-
+        print('original:')
+        print(image.shape)
+        print(label.shape)
 
         # augmentation和preprocessing不太懂是怎麼做的
         # augmentation
         if self.augmentation:
             sample = self.augmentation(image=image, label=label)
             image, label = sample['image'], sample['label']
+            print('augmentation:')
+            print(image.shape)
+            print(label.shape)
         
         # preprocessing
         if self.preprocessing:
             sample = self.preprocessing(image=image, label=label)
             image, label = sample['image'], sample['label']
+            print('preprocessing:')
+            print(image.shape)
+            print(label.shape)
 
         return image, label
 
@@ -175,10 +187,11 @@ class imageDataset(Dataset):
 #     activation='sigmoid',      # activation function, default is None
 #     classes=2,                 # define number of output labels
 # )
+# model = smp.Unet('resnet18', classes=2, encoder_weights='imagenet', aux_params=aux_params)
 
 
 # 設定model
-ENCODER = 'dpn68'
+ENCODER = 'resnet18'
 ENCODER_WEIGHTS = 'imagenet'
 ACTIVATION = 'sigmoid'
 DEVICE = 'cuda'
@@ -213,51 +226,5 @@ val_dataset = imageDataset(
 train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False)
 
-# 設定 loss 和 optimizer
-loss = smp.utils.losses.DiceLoss()
-metrics = [
-    smp.utils.metrics.IoU(threshold=0.5),
-]
-
-optimizer = torch.optim.Adam([ 
-    dict(params=model.parameters(), lr=0.0001),
-])
-
-train_epoch = smp.utils.train.TrainEpoch(
-    model, 
-    loss=loss, 
-    metrics=metrics, 
-    optimizer=optimizer,
-    device=DEVICE,
-    verbose=True,
-)
-
-val_epoch = smp.utils.train.ValidEpoch(
-    model, 
-    loss=loss, 
-    metrics=metrics, 
-    device=DEVICE,
-    verbose=True,
-)
-
-
-
-# train model for 40 epochs
-
-max_score = 0
-
-for i in range(0, 10):
-    print('\nEpoch: {}'.format(i))
-    train_logs = train_epoch.run(train_loader)
-    val_logs = val_epoch.run(val_loader)
-    
-    # do something (save model, change lr, etc.)
-    if max_score < val_logs['iou_score']:
-        max_score = val_logs['iou_score']
-        torch.save(model, './best_model.pth')
-        print('Model saved!')
-        
-    if i == 25:
-        optimizer.param_groups[0]['lr'] = 1e-5
-        print('Decrease decoder learning rate to 1e-5!')
-
+for i,l in train_loader:
+    break

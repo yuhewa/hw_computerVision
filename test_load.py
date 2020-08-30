@@ -26,19 +26,21 @@ val_dir = os.path.join(root_dir, "vertebral","f02")
 
 # 先定義一個Dataset的子類
 class imageDataset(Dataset):
-    def __init__(self, file_dir, augmentation = None, preprocessing = None):
+    def __init__(self, file_dir, classes = None, augmentation = None, preprocessing = None):
         self.file_dir =  file_dir
         self.img_dir = os.path.join(file_dir, 'image')
         self.label_dir = os.path.join(file_dir, 'label')
         self.filenames = os.listdir(self.img_dir)
 
+        # 從classes取出字串, 轉小寫後取出其對應index
+        self.class_values = [classes.index(cls.lower()) for cls in classes]
         self.augmentation = augmentation
         self.preprocessing = preprocessing
 
         # print(self.file_dir)
         # print(self.img_dir)
         # print(self.filenames)
-        
+                
  # override getitem和len這兩個方法
     def __getitem__(self, index):
         img_path = os.path.join(self.img_dir, self.filenames[index])
@@ -46,15 +48,22 @@ class imageDataset(Dataset):
         label_path = os.path.join(self.label_dir, self.filenames[index])
         label = cv2.imread(label_path, cv2.IMREAD_GRAYSCALE)
 
+        
+        labels = [(label == value) for value in self.class_values]
+        print()
+        print(labels)
+        print()
+        label = np.stack(labels, axis=-1).astype('float')
+
         # augmentation
         if self.augmentation:
             sample = self.augmentation(image=img, label=label)
-            image, label = sample['image'], sample['label']
+            img, label = sample['image'], sample['label']
         
         # preprocessing
         if self.preprocessing:
-            sample = self.preprocessing(image=image, label=label)
-            image, label = sample['image'], sample['label']
+            sample = self.preprocessing(image=img, label=label)
+            img, label = sample['image'], sample['label']
 
         return img, label
 
@@ -118,20 +127,24 @@ ENCODER = 'se_resnext50_32x4d'
 ENCODER_WEIGHTS = 'imagenet'
 ACTIVATION = 'sigmoid'
 DEVICE = 'cuda'
+CLASSES = ['vertebral']
 
 preprocessing_fn = smp.encoders.get_preprocessing_fn(ENCODER, ENCODER_WEIGHTS)
+
 
 train_dataset = imageDataset(
     train_dir,
     augmentation = get_training_augmentation(),  
     preprocessing = get_preprocessing(preprocessing_fn),
+    classes=CLASSES
 )
-
 train_loader = train_dataset
 
-for img, label in train_loader:
-    print(type(img))
-    print(type(label))
+
+
+for image, label in train_loader:
+    print(label.shape)
+    print(label)
     break
 
 
