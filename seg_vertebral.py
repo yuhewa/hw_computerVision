@@ -5,32 +5,28 @@ import numpy as np
 
 import torch
 import torchvision.transforms as transforms
+# 若不用albumentaion, 也可以用pytorch預設的transform做augmentation
+import albumentations as albu
 from torch.utils.data import Dataset, DataLoader
 # 如果不自己寫dataload的話, 可以用下面這個預設的loader
 # import torchvision.datasets as dset
 # dset.ImageFolder()
-import albumentations as albu
 
+# 方便建構模型與使用pre-trained model
 import segmentation_models_pytorch as smp
 
 
-# 兩張圖片並排顯示
-def multishow(img, label):
-    fig=plt.figure(figsize=(8, 12))
-    fig.add_subplot(1, 2, 1)
-    plt.imshow(img)
-    fig.add_subplot(1, 2, 2)
-    plt.imshow(label)
-    plt.show()
+
 
 # augmentation函式
+# 使用albumentation的原因是因為其運算較快
+# 將圖片做各種影像處理以擴增訓練資料, p為機率
 def get_training_augmentation():
     train_transform = [
         albu.HorizontalFlip(p=0.5),
-        albu.ShiftScaleRotate(scale_limit=0.5, rotate_limit=0, shift_limit=0.1, p=1, border_mode=0),
-        albu.PadIfNeeded(min_height=1200, min_width=500, always_apply=True, border_mode=0),
         albu.IAAAdditiveGaussianNoise(p=0.2),
         albu.IAAPerspective(p=0.5),
+        albu.PadIfNeeded(min_height=1200, min_width=500, always_apply=True, border_mode=0),
         #0.9的機率取出OneOf中的其中一個, 各個抽中的機率皆為1/3( 因為1/(1+1+1) )
         albu.OneOf(
             [
@@ -59,7 +55,7 @@ def get_training_augmentation():
     return albu.Compose(train_transform)
 
 
-# get_validation_augmentation和get_preprocessing還不是很懂怎麼運作的
+# get_validation用於將圖片大小補齊
 def get_validation_augmentation():
     """Add paddings to make image shape divisible by 32"""
     test_transform = [
@@ -67,10 +63,11 @@ def get_validation_augmentation():
     ]
     return albu.Compose(test_transform)
 
-# 之後會用於取得preprocessing
+# 若不transpose, 則會出現channel數無法match的error
 def to_tensor(x, **kwargs):
     return x.transpose(2, 0, 1).astype('float32')
 
+# 用於獲得pre-train model的前處理, 以及對其做transpose
 def get_preprocessing(preprocessing_fn):
     _transform = [
         albu.Lambda(image=preprocessing_fn),
@@ -85,7 +82,9 @@ train_dir = os.path.join(root_dir, "vertebral","f01")
 val_dir = os.path.join(root_dir, "vertebral","f02")
 
 
-# 先定義一個Dataset的子類
+# 先繼承Dataset, 並撰寫init、getitem、len 
+# __init__用來存取檔案路徑位置
+# __getitem__則將路徑與檔名串在一起並讀取圖檔, 回傳圖檔
 class imageDataset(Dataset):
     def __init__(self, file_dir, classes = None, augmentation = None, preprocessing = None):
         self.file_dir =  file_dir
@@ -128,24 +127,14 @@ class imageDataset(Dataset):
         return len(self.filenames)
 
 
-
-
-
-
-
-
-# train_dataset = imageDataset(train_dir,)
-# train_loader = DataLoader(dataset, batch_size=10, shuffle=False)
-
-# augmented_dataset = imageDataset(train_dir,augmentation=get_training_augmentation(),)
-# augmented_loader = DataLoader(augmented_dataset, batch_size=10, shuffle=False) 
-
-# 若想控制取出量, 調整batch_size就好, 他會一個batch取出一張
-# 若有20張, batch_size設10. 則有2個batch, 就會取出2張
-
-
-
-
+# 兩張圖片並排顯示
+def multishow(img, label):
+    fig=plt.figure(figsize=(8, 12))
+    fig.add_subplot(1, 2, 1)
+    plt.imshow(img)
+    fig.add_subplot(1, 2, 2)
+    plt.imshow(label)
+    plt.show()
 
 # 直接從dataset取出圖片
 # image:train_dataset[0][0], label:train_dataset[0][1]
@@ -153,11 +142,10 @@ class imageDataset(Dataset):
 
 # 從loader取出圖片
 # for img, label in augmented_loader:
-
-    # # 兩張並排顯示, 不過無法控制停止
+    # method 1 兩張並排顯示, 不過無法控制停止
     # multishow(np.uint8(img.numpy()[0]), np.uint8(label.numpy()[0]))
-    # break
-    # 單張顯示
+
+    # method 2 單張顯示, 可停止
     # cv2.imshow('vertebral', np.uint8(label.numpy()[0])) #不確定為什麼要使用.numpy()[0]才能顯示
     # key = cv2.waitKey(1000) # 1000ms = 1s
     # if key == 27: #27代表ESC
@@ -168,13 +156,6 @@ class imageDataset(Dataset):
 # img, label = batch
 
 
-# model設定
-# aux_params=dict(
-#     pooling='max',             # one of 'avg', 'max'
-#     dropout=0.5,               # dropout ratio, default is None
-#     activation='sigmoid',      # activation function, default is None
-#     classes=2,                 # define number of output labels
-# )
 
 
 # 設定model
@@ -184,7 +165,7 @@ ACTIVATION = 'sigmoid'
 DEVICE = 'cuda'
 CLASSES = ['vertebral']
 
-
+# 可以多設 dropout=0.5 避免overfitting 
 model = smp.FPN(
     encoder_name=ENCODER, 
     encoder_weights=ENCODER_WEIGHTS, 
@@ -193,9 +174,10 @@ model = smp.FPN(
 )
 
 
-# 讀取train和validation的資料
+
 preprocessing_fn = smp.encoders.get_preprocessing_fn(ENCODER, ENCODER_WEIGHTS)
 
+# 讀取train和validation的資料
 train_dataset = imageDataset(
     train_dir,
     augmentation = get_training_augmentation(),  
@@ -212,13 +194,19 @@ val_dataset = imageDataset(
 
 train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, num_workers=2)
 val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False)
+# 若想控制取出量, 調整batch_size就好, 他會一個batch取出一張
+# 若有20張, batch_size設10. 則有2個batch, 就會取出2張
+
 
 # 設定 loss 和 optimizer
 loss = smp.utils.losses.DiceLoss()
 metrics = [
     smp.utils.metrics.IoU(threshold=0.5),
 ]
+# IoU為segmentation的準確度
 
+
+# 將model的參數傳給optimizer才能更新model
 optimizer = torch.optim.Adam([ 
     dict(params=model.parameters(), lr=0.0001),
 ])
@@ -242,21 +230,23 @@ val_epoch = smp.utils.train.ValidEpoch(
 
 
 
-# train model for 40 epochs
+
 
 max_score = 0
-
-for i in range(0, 10):
+epoch = 40
+# 開始訓練
+for i in range(0, epoch):
     print('\nEpoch: {}'.format(i))
+    # 紀錄訓練過程的分數與驗證分數
     train_logs = train_epoch.run(train_loader)
     val_logs = val_epoch.run(val_loader)
     
-    # do something (save model, change lr, etc.)
+    # 若目前驗證分數大於過往紀錄, 則儲存model
     if max_score < val_logs['iou_score']:
         max_score = val_logs['iou_score']
         torch.save(model, './best_model.pth')
         print('Model saved!')
-        
+    # 避免無法收斂, 在訓練一定ㄋ次數後會減少learning rate 
     if i == 25:
         optimizer.param_groups[0]['lr'] = 1e-5
         print('Decrease decoder learning rate to 1e-5!')
