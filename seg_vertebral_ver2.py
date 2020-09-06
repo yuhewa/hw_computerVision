@@ -12,8 +12,11 @@ from torch.utils.data import Dataset, DataLoader
 
 # 方便建構模型與使用pre-trained model
 import segmentation_models_pytorch as smp
+# 很好用的工具, 可以跑進度條
 from tqdm import tqdm
+# 用來算IoU
 from sklearn.metrics import confusion_matrix
+
 
 
 
@@ -39,7 +42,6 @@ class imageDataset(Dataset):
         # 從classes取出字串, 轉小寫後取出其對應index
         self.class_values = [classes.index(cls.lower()) for cls in classes]
         self.augmentation = augmentation
-
         
  # override getitem和len這兩個方法
     def __getitem__(self, index):
@@ -47,7 +49,6 @@ class imageDataset(Dataset):
         image = cv2.imread(img_path)
         label_path = os.path.join(self.label_dir, self.filenames[index])
         label = cv2.imread(label_path, cv2.IMREAD_GRAYSCALE)
-
         
         labels = [(label == value) for value in self.class_values]
         label = np.stack(labels, axis=-1).astype('float')
@@ -64,7 +65,7 @@ class imageDataset(Dataset):
 
 
 
-# 設定model
+# 設定model hyperparameters
 ENCODER = 'resnet18'
 ACTIVATION = 'sigmoid'
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -77,15 +78,16 @@ model = smp.Unet(
 ).to(device)
 
 
-
 optimizer = torch.optim.SGD(model.parameters(),lr=0.0001,momentum=0.9,weight_decay=5e-4)
 Threshold_val = 0.6
 criterion = torch.nn.BCEWithLogitsLoss()
 
 
-
 # 參考網址 https://www.youtube.com/watch?v=AZr64OxshLo
 # 可以了解IoU和Dice Coefficient兩者的意義
+
+# IoU計算, 使用confusion matrix計算出判斷正確的pixel
+# 用來當作練習, 實際跑很慢, 所以不用
 def compute_iou(y_pred, y_true):
     # y_true和y_pred都是矩陣(mask), 只有1和0, flatten後變成一維向量
     y_pred = y_pred.flatten()
@@ -121,20 +123,21 @@ def compute_iou(y_pred, y_true):
 
 def dice_coeff(true_mask, pred_mask, non_seg_score=1.0):
     assert true_mask.shape == pred_mask.shape
+    # 化為布林矩陣
     true_mask = np.asarray(true_mask).astype(np.bool)
     pred_mask = np.asarray(pred_mask).astype(np.bool)
 
-    # If both segmentations are all zero, the dice will be 1. (Developer decision)
-    im_sum = true_mask.sum() + pred_mask.sum()
-    if im_sum == 0:
+    # 若兩者皆為0, 怎無法算出分數
+    img_sum = true_mask.sum() + pred_mask.sum()
+    if img_sum == 0:
         return non_seg_score
-    # Compute Dice coefficient
+
+    # 計算dice coeff
     intersection = np.logical_and(true_mask, pred_mask)
-    return 2. * intersection.sum() / im_sum
+    return 2. * intersection.sum() / img_sum
 
 
-#                      training                       #
-
+# training
 # 傳入epoch, loader, net, optim開始訓練
 def train(epoch,trainloader,Net,optimizer):
     Net.train()
@@ -163,14 +166,12 @@ def train(epoch,trainloader,Net,optimizer):
         # 因此會得到一個布林矩陣, pred mask
         pred = (pred.cpu() > threshold.cpu())
 
- ################# accuracy ###########################
+        # 計算 accuracy
         total_pixel += target.nelement()  # 計算所有pixel數量
         correct_pixel += pred.eq(target.cpu()).sum().item()  # pred 和 target pixel一致的數量(包含背景)
         train_acc = correct_pixel / total_pixel
         #mean_iou = compute_iou(y_pred=pred.cpu(), y_true=target.cpu())
-
         Dice = dice_coeff(true_mask=target.cpu(), pred_mask=pred.cpu())
-
 
         # 顯示訓練過程
         verbose_step = len(trainloader) // 10
@@ -201,23 +202,23 @@ def val(epoch,validationloader,Net):
             pred = (pred.cpu() > threshold.cpu())
             total_pixel += target.nelement()  # 計算所有pixel數量
             correct_pixel += pred.eq(target.cpu()).sum().item()  # pred 和 target pixel一致的數量(包含背景)
+            
             train_acc = correct_pixel / total_pixel
-
             # mean_iou = compute_iou(y_pred=pred.cpu(), y_true=target.cpu())
-
             Dice_Coeff = dice_coeff(true_mask=target.cpu(), pred_mask=pred.cpu())
     print('')
     print('val_loss_avg:', train_loss / (len(validationloader)))
     # print('val_miou:', mean_iou)
-    print('val_DiceCoeff:', Dice_Coeff )
+    print('val_DiceLoss:', 1 - Dice_Coeff )
     print('val_overall_acc:', train_acc)
 
 
 
 
-################## start process #################
 
-###########data augmentation###############
+# start
+
+# augmentation
 my_transform = transforms.Compose([
     transforms.ToPILImage(),
     transforms.RandomHorizontalFlip(p=0.5),
@@ -227,32 +228,12 @@ my_transform = transforms.Compose([
     transforms.ToTensor()
 ])
 
-
 # 讀取train和validation的資料
-train_dataset = imageDataset(
-    train_dir,
-    augmentation = my_transform,
-    classes=CLASSES
-)
-
-val_dataset = imageDataset(
-    val_dir,
-    # augmentation = get_validation_augmentation(),
-    classes=CLASSES
-)
-
+train_dataset = imageDataset(train_dir, augmentation = my_transform, classes=CLASSES)
+val_dataset = imageDataset(val_dir, classes=CLASSES)
 TrainingLoader = DataLoader(train_dataset, batch_size=2, shuffle=True)
 ValidationLoader = DataLoader(val_dataset, batch_size=2, shuffle=False)
-# 若想控制取出量, 調整batch_size就好, 他會一個batch取出一張
-# 若有20張, batch_size設10. 則有2個batch, 就會取出2張
-
-
-# # load data
-# Trainingdataset = SegmentationDataset(root = 'datasets',split = 'training',augmentation=my_transform)
-# Validationdataset = SegmentationDataset(root='datasets',split = 'validation',augmentation=None)
-# TrainingLoader = DataLoader(Trainingdataset,batch_size=batch_size,shuffle=True,num_workers=0)
-# ValidationLoader = DataLoader(Validationdataset,batch_size=batch_size,shuffle=True,num_workers=0)
-
+# 若想控制取出量, 調整batch_size就好
 
 Epoch = 10
 # main program
