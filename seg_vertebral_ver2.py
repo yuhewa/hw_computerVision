@@ -19,16 +19,6 @@ from sklearn.metrics import confusion_matrix
 
 
 
-
-
-# dir_path = os.path.dirname(__file__)
-# 發現新的方法 getcwd, 一樣是用來取得當前目錄, 與上面那個有一點差異
-root_dir = os.getcwd() 
-train_dir = os.path.join(root_dir, "vertebral","f01")
-val_dir = os.path.join(root_dir, "vertebral","f02")
-
-
-
 # 先繼承Dataset, 並撰寫init、getitem、len 
 # __init__用來存取檔案路徑位置
 # __getitem__則將路徑與檔名串在一起並讀取圖檔, 回傳圖檔
@@ -202,7 +192,7 @@ def val(epoch,validationloader,Net):
             pred = (pred.cpu() > threshold.cpu())
             total_pixel += target.nelement()  # 計算所有pixel數量
             correct_pixel += pred.eq(target.cpu()).sum().item()  # pred 和 target pixel一致的數量(包含背景)
-            
+
             train_acc = correct_pixel / total_pixel
             # mean_iou = compute_iou(y_pred=pred.cpu(), y_true=target.cpu())
             Dice_Coeff = dice_coeff(true_mask=target.cpu(), pred_mask=pred.cpu())
@@ -217,6 +207,12 @@ def val(epoch,validationloader,Net):
 
 
 # start
+
+# dir_path = os.path.dirname(__file__)
+# 發現新的方法 getcwd, 一樣是用來取得當前目錄, 與上面那個有一點差異
+root_dir = os.getcwd() 
+train_dir = os.path.join(root_dir, "vertebral","f01")
+val_dir = os.path.join(root_dir, "vertebral","f02")
 
 # augmentation
 my_transform = transforms.Compose([
