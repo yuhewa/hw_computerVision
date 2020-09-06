@@ -26,7 +26,7 @@ def get_training_augmentation():
         albu.HorizontalFlip(p=0.5),
         albu.IAAAdditiveGaussianNoise(p=0.2),
         albu.IAAPerspective(p=0.5),
-        albu.PadIfNeeded(min_height=1200, min_width=500, always_apply=True, border_mode=0),
+        # albu.PadIfNeeded(min_height=1200, min_width=500, always_apply=True, border_mode=0),
         #0.9的機率取出OneOf中的其中一個, 各個抽中的機率皆為1/3( 因為1/(1+1+1) )
         albu.OneOf(
             [
@@ -159,14 +159,14 @@ def multishow(img, label):
 
 
 # 設定model
-ENCODER = 'se_resnext50_32x4d'
+ENCODER = 'resnet18'
 ENCODER_WEIGHTS = 'imagenet'
 ACTIVATION = 'sigmoid'
 DEVICE = 'cuda'
 CLASSES = ['vertebral']
 
 # 可以多設 dropout=0.5 避免overfitting 
-model = smp.FPN(
+model = smp.Unet(
     encoder_name=ENCODER, 
     encoder_weights=ENCODER_WEIGHTS, 
     activation=ACTIVATION,
@@ -187,29 +187,25 @@ train_dataset = imageDataset(
 
 val_dataset = imageDataset(
     val_dir,
-    # augmentation = get_validation_augmentation(),  
+    augmentation = get_validation_augmentation(),  
     preprocessing = get_preprocessing(preprocessing_fn),
     classes=CLASSES
 )
 
-train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, num_workers=2)
+train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False)
 # 若想控制取出量, 調整batch_size就好, 他會一個batch取出一張
 # 若有20張, batch_size設10. 則有2個batch, 就會取出2張
 
 
 # 設定 loss 和 optimizer
+# IoU為segmentation的準確度
 loss = smp.utils.losses.DiceLoss()
 metrics = [
     smp.utils.metrics.IoU(threshold=0.5),
 ]
-# IoU為segmentation的準確度
-
-
 # 將model的參數傳給optimizer才能更新model
-optimizer = torch.optim.Adam([ 
-    dict(params=model.parameters(), lr=0.0001),
-])
+optimizer = torch.optim.Adam(params=model.parameters(), lr=0.0001)
 
 train_epoch = smp.utils.train.TrainEpoch(
     model, 
