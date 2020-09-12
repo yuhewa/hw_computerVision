@@ -1,6 +1,7 @@
 import os
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
+import torchvision.transforms as transforms
 from cv2 import cv2
 
 class imageDataset(Dataset):
@@ -13,6 +14,11 @@ class imageDataset(Dataset):
         # 從classes取出字串, 轉小寫後取出其對應index
         self.class_values = [classes.index(cls.lower()) for cls in classes]
         self.augmentation = augmentation
+        self.preprocessing = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.Resize((1216,512)), # 要使之為32的倍數, 網絡架構的關係
+            transforms.ToTensor() # 原本是heigh, width, channel, 變成channel, heigh, width 就可以對應了
+            ]) 
         
  # override getitem和len這兩個方法
     def __getitem__(self, index):
@@ -28,6 +34,9 @@ class imageDataset(Dataset):
         if self.augmentation != None:
             image = self.augmentation(np.uint8(image))
             label = self.augmentation(np.uint8(label))
+        else:
+            image = self.preprocessing(np.uint8(image))
+            label = self.preprocessing(np.uint8(label))
  
         return image, label
 

@@ -40,11 +40,11 @@ class imageDataset(Dataset):
  # override getitem和len這兩個方法
     def __getitem__(self, index):
         img_path = os.path.join(self.img_dir, self.filenames[index])
-        sk_image = io.imread(img_path)
+        # sk_image = io.imread(img_path)
         image = cv2.imread(img_path)
 
         label_path = os.path.join(self.label_dir, self.filenames[index])
-        sk_label = io.imread(label_path, as_gray=True)
+        # sk_label = io.imread(label_path, as_gray=True)
         label = cv2.imread(label_path, cv2.IMREAD_GRAYSCALE)
         
         # labels = [(label == value) for value in self.class_values]
@@ -58,12 +58,20 @@ class imageDataset(Dataset):
         # print(image.shape,'     ', label.shape)
         # print('---------------------------------------------------')
 
+        print('---------------------------------------------------')
+        print('in dataset, before augmentation:')
+        print(image.shape,'     ', label.shape)
+        print('---------------------------------------------------')
 
         # augmentation
         if self.augmentation != None:
             image = self.augmentation(np.uint8(image))
             label = self.augmentation(np.uint8(label))
 
+        print('---------------------------------------------------')
+        print('in dataset, after augmentation:')
+        print(image.shape,'     ', label.shape)
+        print('---------------------------------------------------')
 
         return image, label
 
@@ -83,7 +91,7 @@ val_dir = os.path.join(root_dir, "vertebral","f02")
 
 # augmentation
 my_transform = transforms.Compose([
-    transforms.ToPILImage(),
+    # transforms.ToPILImage(),
     # transforms.RandomHorizontalFlip(p=0.5),
     # transforms.Resize((1216,512)),
     # transforms.RandomRotation(degrees=10),
@@ -92,8 +100,8 @@ my_transform = transforms.Compose([
 ])
 
 # 讀取train和validation的資料
-# train_dataset = imageDataset(train_dir, augmentation = my_transform, classes=CLASSES)
-train_dataset = imageDataset(train_dir, classes=CLASSES)
+train_dataset = imageDataset(train_dir, augmentation = my_transform, classes=CLASSES)
+# train_dataset = imageDataset(train_dir, classes=CLASSES)
 val_dataset = imageDataset(val_dir, classes=CLASSES)
 
 TrainingLoader = DataLoader(train_dataset, batch_size=1, shuffle=True)
@@ -110,4 +118,8 @@ if __name__ =='__main__':
     #     print(data.shape,'    ',target.shape) # batch height width  ,  batch height width 1
 
     for img, label in TrainingLoader:
+        print('---------------------------------------------------')
+        print('in dataloader, after augmentation:')
+        print(img.shape,'     ', label.shape)
+        print('---------------------------------------------------')
         break
