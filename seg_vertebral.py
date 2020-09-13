@@ -26,7 +26,7 @@ def get_training_augmentation():
         albu.HorizontalFlip(p=0.5),
         albu.IAAAdditiveGaussianNoise(p=0.2),
         albu.IAAPerspective(p=0.5),
-        # albu.PadIfNeeded(min_height=1200, min_width=500, always_apply=True, border_mode=0),
+        albu.PadIfNeeded(min_height=1216, min_width=512, always_apply=True, border_mode=0),
         #0.9的機率取出OneOf中的其中一個, 各個抽中的機率皆為1/3( 因為1/(1+1+1) )
         albu.OneOf(
             [
@@ -59,7 +59,7 @@ def get_training_augmentation():
 def get_validation_augmentation():
     """Add paddings to make image shape divisible by 32"""
     test_transform = [
-        albu.PadIfNeeded(1200, 500)
+        albu.PadIfNeeded(1216, 512)
     ]
     return albu.Compose(test_transform)
 
@@ -72,6 +72,7 @@ def get_preprocessing(preprocessing_fn):
     _transform = [
         albu.Lambda(image=preprocessing_fn),
         albu.Lambda(image=to_tensor, mask=to_tensor),
+        # albu.PadIfNeeded(1216, 512)
     ]
     return albu.Compose(_transform)
 
@@ -192,8 +193,8 @@ val_dataset = imageDataset(
     classes=CLASSES
 )
 
-train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True)
-val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False)
+train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
 # 若想控制取出量, 調整batch_size就好, 他會一個batch取出一張
 # 若有20張, batch_size設10. 則有2個batch, 就會取出2張
 
@@ -226,10 +227,8 @@ val_epoch = smp.utils.train.ValidEpoch(
 
 
 
-
-
 max_score = 0
-epoch = 40
+epoch = 5
 # 開始訓練
 for i in range(0, epoch):
     print('\nEpoch: {}'.format(i))

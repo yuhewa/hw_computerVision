@@ -166,6 +166,7 @@ def train(epoch,trainloader,Net,optimizer):
     print('Dice Score:', dice)  # dice loss的分數
     print('overall_acc:', overall_acc)
     print()
+    return train_loss, dice
 
     
 
@@ -239,9 +240,9 @@ my_transform = transforms.Compose([
 
 # 讀取train和validation的資料
 train_dataset = imageDataset(train_dir, augmentation = my_transform, classes=CLASSES)
-val_dataset = imageDataset(val_dir, classes=CLASSES)
-TrainingLoader = DataLoader(train_dataset, batch_size=2, shuffle=True)
-ValidationLoader = DataLoader(val_dataset, batch_size=2, shuffle=False)
+# val_dataset = imageDataset(val_dir, classes=CLASSES)
+TrainingLoader = DataLoader(train_dataset, batch_size=1, shuffle=True)
+# ValidationLoader = DataLoader(val_dataset, batch_size=1, shuffle=False)
 # 若想控制取出量, 調整batch_size就好
 
 Epoch = 1
@@ -256,12 +257,15 @@ if __name__ =='__main__':
     #     #     learning_rate = learning_rate/10
 
     #     # val(epoch=epoch,validationloader=ValidationLoader,Net= Net)
-
+    best_loss = 0
     for epoch in range(Epoch):
-        train(epoch=epoch,trainloader = TrainingLoader,Net = model,optimizer = optimizer)
+        loss, dice = train(epoch=epoch,trainloader = TrainingLoader,Net = model,optimizer = optimizer)
+        if loss > best_loss:
+            torch.save(model.state_dict(), './best_model/test_model.pth')
+
     
 
-    torch.save(model.state_dict(), './best_model/test_model.pth')
+    # torch.save(model.state_dict(), './best_model/test_model.pth')
 
 
     
