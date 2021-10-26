@@ -1,3 +1,2 @@
-# hw_computerVision
-first version 
+# computerVision segmentation
 
